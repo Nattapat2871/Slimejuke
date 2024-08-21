@@ -63,6 +63,11 @@ class YTDLSource(discord.PCMVolumeTransformer):
 @bot.event
 async def on_ready():
     print(f'เข้าสู่ระบบเป็น {bot.user}')
+    streaming_activity = discord.Streaming(
+        name="ª ᴊᴜʀᴀ ᴛᴇᴍᴘᴇsᴛ sʜᴏᴘ™",
+        url="https://www.twitch.tv/nattapat2871_"
+    )
+    await bot1.change_presence(activity=streaming_activity)
 
 async def play_next(ctx):
     if len(queue) > 0:
@@ -161,14 +166,6 @@ async def leave(ctx):
         await ctx.send("ออกจากช่องเสียงแล้ว.")
     else:
         await ctx.send("บอทไม่อยู่ในช่องเสียง.")
-
-@bot.event
-async def on_ready():
-    streaming_activity = discord.Streaming(
-        name="ª ᴊᴜʀᴀ ᴛᴇᴍᴘᴇsᴛ sʜᴏᴘ™",
-        url="https://www.twitch.tv/nattapat2871_"
-    )
-    await bo1.change_presence(activity=streaming_activity)
 
 server_on()
 
