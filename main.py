@@ -1,6 +1,6 @@
 import os
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 import yt_dlp as youtube_dl
 import asyncio
 import time
@@ -22,12 +22,15 @@ ytdl_format_options = {
     'restrictfilenames': True,
     'noplaylist': True,
     'nocheckcertificate': True,
-    'ignoreerrors': False,
+    'ignoreerrors': True,  # Allow errors to be ignored
     'logtostderr': False,
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
-    'source_address': '0.0.0.0'
+    'source_address': '0.0.0.0',
+    'headers': {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
 }
 
 ffmpeg_options = {
@@ -48,11 +51,14 @@ class YTDLSource(discord.PCMVolumeTransformer):
     @classmethod
     async def from_url(cls, url, *, loop=None, stream=False):
         loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
-        if 'entries' in data:
-            data = data['entries'][0]
-        filename = data['url'] if stream else ytdl.prepare_filename(data)
-        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+        try:
+            data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+            if 'entries' in data:
+                data = data['entries'][0]
+            filename = data['url'] if stream else ytdl.prepare_filename(data)
+            return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+        except youtube_dl.DownloadError as e:
+            raise ValueError(f"Error downloading video: {e}")
 
 @bot.event
 async def on_ready():
@@ -61,10 +67,14 @@ async def on_ready():
 async def play_next(ctx):
     if len(queue) > 0:
         url = queue.pop(0)
-        player = await YTDLSource.from_url(url, loop=bot.loop, stream=True)
-        start_times[ctx.guild.id] = time.time()
-        ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop).result())
-        await show_music_info(ctx)
+        try:
+            player = await YTDLSource.from_url(url, loop=bot.loop, stream=True)
+            start_times[ctx.guild.id] = time.time()
+            ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop).result())
+            await show_music_info(ctx)
+        except ValueError as e:
+            await ctx.send(f"เกิดข้อผิดพลาดในการเล่นเพลง: {e}")
+            await play_next(ctx)
     else:
         await ctx.send("ไม่มีเพลงในคิว.")
 
@@ -86,26 +96,20 @@ async def show_music_info(ctx):
             embed.add_field(name="ระยะเวลา", value=f"{elapsed_time_str} / {duration_str}", inline=False)
             embed.add_field(name="คิวเพลง", value="\n".join(queue) if queue else "คิวเพลงว่าง", inline=False)
 
-            # Add thumbnail image in the top-right corner
             if current_thumbnail:
-                embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1140325634200064050/1275701148816244786/rimuru-tempest-playful-finger-dance-ybt447yf6vjmub3i.gif?ex=66c6d8c7&is=66c58747&hm=9e5135b4c1ed17dfc8bdc33ca5685621f5f97bf2768abab5b73e07f112ebda91&")  # This places a small image in the top-right corner
+                embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1140325634200064050/1275701148816244786/rimuru-tempest-playful-finger-dance-ybt447yf6vjmub3i.gif?ex=66c6d8c7&is=66c58747&hm=9e5135b4c1ed17dfc8bdc33ca5685621f5f97bf2768abab5b73e07f112ebda91&")
 
-            # Add large image at the bottom
-            embed.set_image(url=current_thumbnail)  # This makes the image large and positions it at the bottom
-
-            # Add "Developed by" at the bottom-left corner
-            embed.set_footer(text="พัฒนาโดย Nattapat2871")  # Replace 'Your Name' with your name or the developer's name
+            embed.set_image(url=current_thumbnail)
+            embed.set_footer(text="พัฒนาโดย Nattapat2871")
 
             if hasattr(ctx, 'music_info_message') and ctx.music_info_message:
                 await ctx.music_info_message.edit(embed=embed)
             else:
                 ctx.music_info_message = await ctx.send(embed=embed)
                 
-            await asyncio.sleep(0.5)  # Update every  0.5 seconds
+            await asyncio.sleep(0.5)
     else:
         await ctx.send("ไม่มีเพลงเล่นอยู่ตอนนี้")
-
-
 
 @bot.command(name='play', aliases=['p'], help='เล่นเพลงจาก YouTube')
 async def play(ctx, url):
@@ -119,12 +123,15 @@ async def play(ctx, url):
         await voice_channel.connect()
 
     async with ctx.typing():
-        player = await YTDLSource.from_url(url, loop=bot.loop, stream=True)
-        queue.append(url)
-        start_times[ctx.guild.id] = time.time()
-        if not ctx.voice_client.is_playing():
-            await play_next(ctx)
-        await show_music_info(ctx)
+        try:
+            player = await YTDLSource.from_url(url, loop=bot.loop, stream=True)
+            queue.append(url)
+            start_times[ctx.guild.id] = time.time()
+            if not ctx.voice_client.is_playing():
+                await play_next(ctx)
+            await show_music_info(ctx)
+        except ValueError as e:
+            await ctx.send(f"เกิดข้อผิดพลาดในการเล่นเพลง: {e}")
 
 @bot.command(name='pause', help='หยุดเพลงชั่วคราว')
 async def pause(ctx):
@@ -155,7 +162,15 @@ async def leave(ctx):
     else:
         await ctx.send("บอทไม่อยู่ในช่องเสียง.")
 
+@bot1.event
+async def on_ready():
+    print(f'Bot 1 Logged in as {bot1.user.name}')
+    streaming_activity = discord.Streaming(
+        name="ª ᴊᴜʀᴀ ᴛᴇᴍᴘᴇsᴛ sʜᴏᴘ™",
+        url="https://www.twitch.tv/nattapat2871_"
+    )
+    await bot1.change_presence(activity=streaming_activity)
+
 server_on()
 
 bot.run(os.getenv('TOKEN'))
-
