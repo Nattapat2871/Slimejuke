@@ -67,7 +67,7 @@ async def on_ready():
         name="ª ᴊᴜʀᴀ ᴛᴇᴍᴘᴇsᴛ sʜᴏᴘ™",
         url="https://www.twitch.tv/nattapat2871_"
     )
-    await bot1.change_presence(activity=streaming_activity)
+    await bot.change_presence(activity=streaming_activity)
 
 async def play_next(ctx):
     if len(queue) > 0:
