@@ -53,12 +53,16 @@ class YTDLSource(discord.PCMVolumeTransformer):
         loop = loop or asyncio.get_event_loop()
         try:
             data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+            if data is None:
+                raise ValueError("ไม่สามารถดึงข้อมูลจาก URL ได้")
             if 'entries' in data:
                 data = data['entries'][0]
             filename = data['url'] if stream else ytdl.prepare_filename(data)
             return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
         except youtube_dl.DownloadError as e:
-            raise ValueError(f"Error downloading video: {e}")
+            raise ValueError(f"ข้อผิดพลาดในการดาวน์โหลด: {e}")
+        except Exception as e:
+            raise ValueError(f"เกิดข้อผิดพลาด: {e}")
 
 @bot.event
 async def on_ready():
@@ -156,8 +160,11 @@ async def resume(ctx):
 
 @bot.command(name='stop', help='หยุดเพลง')
 async def stop(ctx):
-    ctx.voice_client.stop()
-    await ctx.send("เพลงถูกหยุด.")
+    if ctx.voice_client.is_playing() or ctx.voice_client.is_paused():
+        ctx.voice_client.stop()
+        await ctx.send("เพลงถูกหยุด.")
+    else:
+        await ctx.send("ไม่มีเพลงที่กำลังเล่นอยู่ตอนนี้.")
 
 @bot.command(name='leave', help='ให้บอทออกจากช่องเสียง')
 async def leave(ctx):
