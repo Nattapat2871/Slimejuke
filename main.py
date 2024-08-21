@@ -162,14 +162,13 @@ async def leave(ctx):
     else:
         await ctx.send("บอทไม่อยู่ในช่องเสียง.")
 
-@bot1.event
+@bot.event
 async def on_ready():
-    print(f'Bot 1 Logged in as {bot1.user.name}')
     streaming_activity = discord.Streaming(
         name="ª ᴊᴜʀᴀ ᴛᴇᴍᴘᴇsᴛ sʜᴏᴘ™",
         url="https://www.twitch.tv/nattapat2871_"
     )
-    await bot1.change_presence(activity=streaming_activity)
+    await bo1.change_presence(activity=streaming_activity)
 
 server_on()
 
