@@ -174,6 +174,11 @@ async def leave(ctx):
     else:
         await ctx.send("บอทไม่อยู่ในช่องเสียง.")
 
+@bot.command(name='ping', help='แสดงความเร็วในการตอบสนองของบอท')
+async def ping(ctx):
+    await ctx.send(f'Pong! {round(bot.latency * 1000)}ms')
+
+
 server_on()
 
 bot.run(os.getenv('TOKEN'))
