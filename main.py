@@ -1,20 +1,24 @@
-import os
+import os 
 import discord
 from discord.ext import commands
 import yt_dlp as youtube_dl
 import asyncio
 import time
-
 from alive import server_on
+from googleapiclient.discovery import build
+
+# Global variables
+queue = []
+start_times = {}
+
+# Set up Google API
+api_key = os.getenv('API_KEY')
+youtube = build('youtube', 'v3', developerKey=api_key)
 
 intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix='*', intents=intents)
-
-# Global variables
-queue = []
-start_times = {}
 
 ytdl_format_options = {
     'format': 'bestaudio/best',
@@ -22,7 +26,7 @@ ytdl_format_options = {
     'restrictfilenames': True,
     'noplaylist': True,
     'nocheckcertificate': True,
-    'ignoreerrors': True,  # Allow errors to be ignored
+    'ignoreerrors': True,
     'logtostderr': False,
     'quiet': True,
     'no_warnings': True,
@@ -100,7 +104,7 @@ async def show_music_info(ctx):
             elapsed_time_str = f"{int(elapsed_time // 60)}:{int(elapsed_time % 60):02d}"
             duration_str = f"{current_duration // 60}:{current_duration % 60:02d}"
             
-            embed = discord.Embed(title="ข้อมูลเพลง", color=0x00ff00)
+            embed = discord.Embed(title="ข้อมูลเพลง", color=0x90E0EF)
             embed.add_field(name="เพลงปัจจุบัน", value=current_title, inline=False)
             embed.add_field(name="ระยะเวลา", value=f"{elapsed_time_str} / {duration_str}", inline=False)
             embed.add_field(name="คิวเพลง", value="\n".join(queue) if queue else "คิวเพลงว่าง", inline=False)
@@ -119,6 +123,33 @@ async def show_music_info(ctx):
             await asyncio.sleep(0.5)
     else:
         await ctx.send("ไม่มีเพลงเล่นอยู่ตอนนี้")
+
+def search_youtube(query):
+    request = youtube.search().list(
+        part='snippet',
+        q=query,
+        type='video',
+        order='viewCount',
+        maxResults=1
+    )
+    response = request.execute()
+
+    if 'items' in response and len(response['items']) > 0:
+        video = response['items'][0]
+        video_id = video['id']['videoId']
+        video_title = video['snippet']['title']
+        return f'https://www.youtube.com/watch?v={video_id}', video_title
+    else:
+        return None, None
+
+@bot.command(name='search', help='ค้นหาและเล่นเพลงจาก YouTube')
+async def search(ctx, *, query):
+    url, title = search_youtube(query)
+    if url:
+        await ctx.send(f'กำลังเล่นเพลง: {title}\n{url}')
+        await play(ctx, url)  # ใช้คำสั่ง play ที่คุณได้เขียนไว้
+    else:
+        await ctx.send('ไม่พบผลลัพธ์สำหรับคำค้นหานี้.')
 
 @bot.command(name='play', aliases=['p'], help='เล่นเพลงจาก YouTube')
 async def play(ctx, url):
